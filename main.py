@@ -92,17 +92,7 @@ class RePDFer:
             for page_content in pages_temp[page_index]:
                 if isinstance(page_content, pdfminer.layout.LTTextBoxHorizontal):
                     # Changes bad encoding of all his PDF's
-                    text = page_content.get_text()
-                    text = text.replace('`e', 'è')
-                    text = text.replace('´e', 'é')
-                    text = text.replace('`a', 'à')
-                    text = text.replace('ˆa', 'â')
-                    text = text.replace('ˆe', 'ê')
-                    text = text.replace('ˆı', 'î')
-                    text = text.replace('ˆo', 'ô')
-                    text = text.replace('¸c', 'ç')
-                    text = text.replace('`u', 'ù')
-                    text = text.replace('ˆu', 'û')
+                    text = self.decode_text(page_content.get_text())
 
                     # Gets the title/subtitle/section of the current page
                     # to always know where this piece of text is going to
@@ -128,6 +118,46 @@ class RePDFer:
             pages.append(content)
 
         return pages
+
+    def decode_text(self, text):
+        """
+        Decode the text from the pdf
+        :param text: text to decode
+        :return: decoded text
+        """
+        text = text.replace('`e', 'è')
+        text = text.replace('´e', 'é')
+        text = text.replace('`a', 'à')
+        text = text.replace('ˆa', 'â')
+        text = text.replace('ˆe', 'ê')
+        text = text.replace('ˆı', 'î')
+        text = text.replace('ˆo', 'ô')
+        text = text.replace('¸c', 'ç')
+        text = text.replace('`u', 'ù')
+        text = text.replace('ˆu', 'û')
+
+        text = text.replace('(cid:28) ', '"')
+        text = text.replace(' (cid:29)', '"')
+        
+        # A stylised l so may change if we want to 
+        # stylise the outfile in consequence
+        text = text.replace('(cid:96)', 'l') 
+
+        # A math definition of a symbol 
+        text = text.replace('(cid:124)', '') 
+        text = text.replace('(cid:123)', '') 
+        text = text.replace('(cid:122)', '') 
+        text = text.replace('(cid:125)', '') 
+
+        text = text.replace('(cid:26)', "") 
+
+        text = text.replace('(cid:88)', '{sum symbol}') 
+        text = text.replace('(cid:80)', '{sum symbol}') 
+        text = text.replace('(cid:39)', '~=') 
+        text = text.replace(' (cid:48)', "'") 
+
+
+        return text
 
     def main(self):
         """
@@ -167,7 +197,7 @@ class RePDFer:
                     final_text += "\n**" + line[:-1] + "**\n\n"
 
                 else:
-                    final_text += line + ''
+                    final_text += line.replace('\n', ' ') + '\n'
 
             final_text += '\n'
 
@@ -178,11 +208,11 @@ class RePDFer:
     def title_or_subtitle_changement(self, page):
         string = ""
         if self.writing_section["title"] != page["title"]:
-            string += "## " + page["title"] + "\n"
+            string += "## " + page["title"]
             self.writing_section["title"] = page["title"]
 
         if self.writing_section["subtitle"] != page["subtitle"]:
-            string += "### " + page["subtitle"] + "\n"
+            string += "### " + page["subtitle"]
             self.writing_section["subtitle"] = page["subtitle"]
         
         return string
@@ -190,7 +220,7 @@ class RePDFer:
     def section_changement(self, page):
         if self.writing_section["section"] != page["section"]:
             self.writing_section["section"] = page["section"]
-            return "#### " + page["section"] + "\n"
+            return "#### " + page["section"]
 
         return ""
 
