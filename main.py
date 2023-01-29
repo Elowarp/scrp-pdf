@@ -80,7 +80,7 @@ class RePDFer:
         pages = []
 
         # Skips the defaults pages of every PDF's
-        for page_index in range(3, len(pages_temp)-1):
+        for page_index in range(3, len(pages_temp)):
             content = {
                 "texts": [],
                 "images": [],
@@ -156,7 +156,7 @@ class RePDFer:
             # Every thing that is NOT the last 4 string
             # Which are the name of the teacher, the course subject
             # the current page and the school  
-            for line in page["texts"][:-4]:
+            for line in page["texts"][:-2]:
                 # If there is an image
                 if "Figure" in line:
                     final_text += "\nIMAGE\n\n"
@@ -211,8 +211,8 @@ class RePDFer:
         self.file.close()
 
 if __name__ == '__main__':
-    pdf_path = './cpx_moy_amortie.pdf'
     # pdf_path = './linux.pdf'
+    pdf_path = './cpx_moy_amortie.pdf'
     rePDFer = RePDFer(pdf_path)
     # print(rePDFer.extract_text_from_pdf()[50])
     rePDFer.main()
