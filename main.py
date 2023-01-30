@@ -18,8 +18,10 @@ SECTION_X0 = 9
 SECTION_Y1 = 253
 
 class RePDFer:
-    def __init__(self, pdf_path):
+    def __init__(self, pdf_path, page_to_skip=3):
         self.pdf_path = pdf_path
+        self.page_to_skip = page_to_skip
+
         self.file = open(pdf_path, 'rb')
         self.filename = pdf_path.split('/')[-1].split('.')[0]
         self.parser = pdfminer.pdfparser.PDFParser(self.file)
@@ -47,11 +49,12 @@ class RePDFer:
 
                      Which are use to know where we are in the pdf
         """
+        # First, we need to get every pages from the pdf while avoiding
+        # the duplicated pages
         pages_temp = []
-
         previous_page_id = 1
         previous_page_elements = []
-
+        i=0
         for page_layout in extract_pages(self.pdf_path):
             page_elements = []
             last_text = ""
@@ -63,6 +66,7 @@ class RePDFer:
                 # Adds every piece of the layout to the elements list
                 page_elements.append(element)
                 
+                # if i==78 : print(element)
             
             # Avoid duplicated pages by getting the last one showing before
             # changing entirely
@@ -75,49 +79,87 @@ class RePDFer:
             else:
                 previous_page_elements = page_elements
 
+            i+=1
+
         pages_temp.append(previous_page_elements)
 
         pages = []
 
-        # Skips the defaults pages of every PDF's
-        for page_index in range(3, len(pages_temp)):
-            content = {
-                "texts": [],
-                "images": [],
-                "title": "",
-                "subtitle": "",
-                "section": "",
-            }
+        # Skips the defaults pages of every PDF's and get the content
+        # out of every other pages
+        for page_layout in pages_temp[self.page_to_skip:]:
+            pages.append(self.extract_information_from_page(page_layout))
 
-            for page_content in pages_temp[page_index]:
-                if isinstance(page_content, pdfminer.layout.LTTextBoxHorizontal):
-                    # Changes bad encoding of all his PDF's
-                    text = self.decode_text(page_content.get_text())
+        return pages
 
-                    # Gets the title/subtitle/section of the current page
-                    # to always know where this piece of text is going to
-                    # be at the end
-                    if round(page_content.bbox[2]) == TITLE_X1 and \
-                        round(page_content.bbox[3]) == TITLE_Y1:
-                        
-                        content["title"] = text
+    def extract_information_from_page(self, page_layout):
+        """
+        Extract the usefull information from a page layout
+        Parameters
+            page_layout (list) - List of elements from the page layout
 
-                    elif round(page_content.bbox[0]) == SUBTITLE_X0 and \
-                        round(page_content.bbox[1]) == SUBTITLE_Y0:
+        Returns
+            (dict) - Dict containing :
+                        - the texts from the page  
+                        - the images
+                        - the current title
+                        - the current subtitle
+                        - the current section name
+                        - the potential code section
+        """
 
-                        content["subtitle"] = text
+        content = {
+            "texts": [],
+            "images": [],
+            "title": "",
+            "subtitle": "",
+            "section": "",
+            "code_section": "",
+        }
 
-                    elif round(page_content.bbox[0]) == SECTION_X0 and \
-                        round(page_content.bbox[3]) == SECTION_Y1:
+        for element in page_layout:
+            if isinstance(element, pdfminer.layout.LTTextBoxHorizontal):
+                # Gets the font info of the current text
+                fontinfo = set()
+                for line in element:
+                    for character in line:
+                        if isinstance(character, pdfminer.layout.LTChar):
+                            # fontinfo.add(character.fontname)
+                            # fontinfo.add(character.size)
+                            fontinfo.add(character.graphicstate.scolor)
+                            fontinfo.add(character.graphicstate.ncolor)
 
-                        content["section"] = text
 
+                # Changes bad encoding of all his PDF's
+                text = self.decode_text(element.get_text())
+
+                # Gets the title/subtitle/section of the current page
+                # to always know where this piece of text is going to
+                # be at the end
+                if round(element.bbox[2]) == TITLE_X1 and \
+                    round(element.bbox[3]) == TITLE_Y1:
+                    
+                    content["title"] = text
+
+                elif round(element.bbox[0]) == SUBTITLE_X0 and \
+                    round(element.bbox[1]) == SUBTITLE_Y0:
+
+                    content["subtitle"] = text
+
+                elif round(element.bbox[0]) == SECTION_X0 and \
+                    round(element.bbox[3]) == SECTION_Y1:
+
+                    content["section"] = text
+
+                else:
+                    # If the text is blue, it's a kind of definition
+                    if (0.2, 0.2, 0.7) in fontinfo:
+                        content["texts"].append("> " + text)
+                    
                     else:
                         content["texts"].append(text)
 
-            pages.append(content)
-
-        return pages
+        return content
 
     def decode_text(self, text):
         """
@@ -142,6 +184,7 @@ class RePDFer:
         # A stylised l so may change if we want to 
         # stylise the outfile in consequence
         text = text.replace('(cid:96)', 'l') 
+        text = text.replace('ﬁ', 'fi') 
 
         # A math definition of a symbol 
         text = text.replace('(cid:124)', '') 
@@ -180,8 +223,7 @@ class RePDFer:
             
             section = self.section_changement(page)
             final_text += section
-
-
+          
 
             # Every thing that is NOT the last 4 string
             # Which are the name of the teacher, the course subject
@@ -205,6 +247,18 @@ class RePDFer:
         # Creates final file
         self.write_file(final_text)
 
+    def write_title(self, text):
+        """
+        Write the title of the file
+        Parameters:
+            text (string) -  text to write
+
+        Returns:
+            None
+        """
+        self.text.insertString(self.cursor, text,0)
+
+
     def title_or_subtitle_changement(self, page):
         string = ""
         if self.writing_section["title"] != page["title"]:
@@ -224,7 +278,6 @@ class RePDFer:
 
         return ""
 
-
     def write_file(self, text):
         """
         Write the text in a file
@@ -240,6 +293,15 @@ class RePDFer:
     def close(self):
         self.file.close()
 
+def execute():
+    # pdf_path = './linux.pdf'
+    pdf_path = '/media/Partage/Code/scrp-pdf/cpx_moy_amortie.pdf'
+    rePDFer = RePDFer(pdf_path)
+    # print(rePDFer.extract_text_from_pdf()[50])
+    rePDFer.main()
+    rePDFer.close()
+    rePDFer.doc.Dispose()
+
 if __name__ == '__main__':
     # pdf_path = './linux.pdf'
     pdf_path = './cpx_moy_amortie.pdf'
@@ -247,3 +309,4 @@ if __name__ == '__main__':
     # print(rePDFer.extract_text_from_pdf()[50])
     rePDFer.main()
     rePDFer.close()
+
