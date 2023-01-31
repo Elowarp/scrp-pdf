@@ -1,6 +1,11 @@
 import pdfminer
 from pdfminer.high_level import extract_pages
 
+from odf.opendocument import load
+from odf.style import Style, TextProperties
+from odf.text import H, P, Span
+
+
 # Notes :
 # Title 1 : 116.228,263.926,176.106,269.904
 # Title 2 : 186.731,263.926,217.773,269.904
@@ -31,6 +36,16 @@ class RePDFer:
             "subtitle": "",
             "section": "",
         }
+
+        self.doc = load("template.odt")
+        self.styles = {
+            "BigTitle" : Style(name="Title", family="paragraph"),
+            "Title" : Style(name="Heading 1", family="paragraph"),
+            "Subtitle" : Style(name="Heading 2", family="paragraph"),
+            "Section" : Style(name="Heading 3", family="paragraph"),
+            "Text": Style(name="Paragraphe", family="paragraph"),
+        }
+
 
     def extract_content_from_pdf(self):
         """
@@ -210,24 +225,22 @@ class RePDFer:
         """
         pages = self.extract_content_from_pdf()
 
-        final_text = '# ' + self.filename.upper() + '\n\n'
+        self.write_bigtitle(self.filename.upper())
 
         # Create text in markdown
         for page in pages:
             # Write titles/subtitles/sections when changing
-            title_subtitle = self.title_or_subtitle_changement(page)
 
             ## Avoid duplicated summuary after each title/subtitle
-            final_text += title_subtitle 
-            if title_subtitle != "": continue 
+            if self.title_or_subtitle_changement(page): continue 
             
-            section = self.section_changement(page)
-            final_text += section
+            self.section_changement(page)
           
 
             # Every thing that is NOT the last 4 string
             # Which are the name of the teacher, the course subject
             # the current page and the school  
+            final_text = ""
             for line in page["texts"][:-2]:
                 # If there is an image
                 if "Figure" in line:
@@ -241,13 +254,13 @@ class RePDFer:
                 else:
                     final_text += line.replace('\n', ' ') + '\n'
 
-            final_text += '\n'
-
+                text = P(stylename=self.styles["Text"], text=final_text)
+            self.doc.text.addElement(text)
 
         # Creates final file
         self.write_file(final_text)
 
-    def write_title(self, text):
+    def write_bigtitle(self, text):
         """
         Write the title of the file
         Parameters:
@@ -256,28 +269,41 @@ class RePDFer:
         Returns:
             None
         """
-        self.text.insertString(self.cursor, text,0)
+        heading = H(outlinelevel=1, stylename=self.styles["BigTitle"], text=text)
+        self.doc.text.addElement(heading)
 
 
     def title_or_subtitle_changement(self, page):
-        string = ""
+        changed = False
         if self.writing_section["title"] != page["title"]:
-            string += "## " + page["title"]
+            # Write the title in the odt file
+            text = H(outlinelevel=2, stylename=self.styles["Title"], text=page["title"])
+            self.doc.text.addElement(text)
+
+            # Keep up to date the current title
             self.writing_section["title"] = page["title"]
+            changed = True
 
         if self.writing_section["subtitle"] != page["subtitle"]:
-            string += "### " + page["subtitle"]
+            # Write the title in the odt file
+            text = H(outlinelevel=3, stylename=self.styles["Subtitle"], text=page["title"])
+            self.doc.text.addElement(text)
+
+            # Keep up to date the current subtitle
             self.writing_section["subtitle"] = page["subtitle"]
+            changed = True
         
-        return string
+        return changed
 
     def section_changement(self, page):
         if self.writing_section["section"] != page["section"]:
+            # Keep up to date the current section
             self.writing_section["section"] = page["section"]
-            return "#### " + page["section"]
-
-        return ""
-
+            
+            # Write the title in the odt file
+            text = H(outlinelevel=4, stylename=self.styles["Section"], text=page["section"])
+            self.doc.text.addElement(text)
+        
     def write_file(self, text):
         """
         Write the text in a file
@@ -291,6 +317,7 @@ class RePDFer:
             f.write(text)
 
     def close(self):
+        self.doc.save("output.odt")
         self.file.close()
 
 def execute():
@@ -306,7 +333,6 @@ if __name__ == '__main__':
     # pdf_path = './linux.pdf'
     pdf_path = './cpx_moy_amortie.pdf'
     rePDFer = RePDFer(pdf_path)
-    # print(rePDFer.extract_text_from_pdf()[50])
+    # # print(rePDFer.extract_text_from_pdf()[50])
     rePDFer.main()
     rePDFer.close()
-

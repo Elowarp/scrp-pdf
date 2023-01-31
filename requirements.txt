@@ -1,1 +1,2 @@
 pdfminer.six==20221105
+odfpy==1.4.1
