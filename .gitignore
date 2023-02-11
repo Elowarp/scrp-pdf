@@ -2,3 +2,5 @@
 *.pdf
 *.md
 output.odt
+config.json
+*.pyc

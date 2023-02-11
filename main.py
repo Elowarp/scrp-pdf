@@ -1,3 +1,10 @@
+'''
+ Nom : Elowan
+ Email : elowanh@yahoo.com
+ Création : 12-01-2023 11:29:13
+ Dernière modification : 11-02-2023 22:35:45
+'''
+
 import pdfminer
 from pdfminer.high_level import extract_pages
 
@@ -5,25 +12,60 @@ from odf.opendocument import load
 from odf.style import Style, TextProperties
 from odf.text import H, P, Span
 
+from pdfviewer import PDFViewer
+from tkinter import Tk
 
-# Notes :
-# Title 1 : 116.228,263.926,176.106,269.904
-# Title 2 : 186.731,263.926,217.773,269.904
-# Title 3 : 8.504,238.257,49.458,252.603
-#
-# Box Coordinates : x0, y0, x1, y1
+import json
+import os
 
-TITLE_X1 = 176
-TITLE_Y1 = 270
+# Usefull functions
+def round_bbox(bbox):
+    """
+    Round the bbox to the nearest integer
+    Parameters
+        bbox (list) - The bbox to round
 
-SUBTITLE_X0 = 187
-SUBTITLE_Y0 = 264
+    Returns
+        (list) - The rounded bbox
+    """
+    return [round(x) for x in bbox]
 
-SECTION_X0 = 9
-SECTION_Y1 = 253
+def approximatily_equal(a, b, tolerance=5):
+    """
+    Return True if a and b are approximatily equal (with a tolerance)
+    Parameters
+        a (float) - The first number
+        b (float) - The second number
+        tolerance (float) - The tolerance
+
+    Returns
+        (bool) - True if a and b are approximatily equal
+    """
+    return abs(a-b) < tolerance
+
+def approx_tuple_equal(a, b, tolerance=5):
+    """
+    Return True if a and b are approximatily equal (with a tolerance)
+    Parameters
+        a (tuple) - The first tuple
+        b (tuple) - The second tuple
+        tolerance (float) - The tolerance
+
+    Returns
+        (bool) - True if a and b are approximatily equal
+    """
+    if len(a) != len(b):
+        return False
+    
+    # For each element of the tuple
+    for i in range(len(a)):
+        if not approximatily_equal(a[i], b[i], tolerance):
+            return False
+
+    return True
 
 class RePDFer:
-    def __init__(self, pdf_path, page_to_skip=3):
+    def __init__(self, pdf_path, page_to_skip=2):
         self.pdf_path = pdf_path
         self.page_to_skip = page_to_skip
 
@@ -37,7 +79,8 @@ class RePDFer:
             "section": "",
         }
 
-        self.doc = load("template.odt")
+        # Sets styles for the odt document
+        self.odtdoc = load("template.odt")
         self.styles = {
             "BigTitle" : Style(name="Title", family="paragraph"),
             "Title" : Style(name="Heading 1", family="paragraph"),
@@ -45,9 +88,26 @@ class RePDFer:
             "Section" : Style(name="Heading 3", family="paragraph"),
             "Text": Style(name="Paragraphe", family="paragraph"),
         }
+        
+        # Get the resolution of the pdf
+        self.pdfsize = [x.mediabox for x in pdfminer.pdfpage.PDFPage.create_pages(self.document)][25]
+        self.pdfsize = (round(self.pdfsize[2]), round(self.pdfsize[3]))
 
+        # Creating the window
+        self.root = Tk()
+        self.zoom = 2
+        self.viewer = PDFViewer(pdf_path, self.pdfsize, zoom=self.zoom)
+        self.root.geometry("{}x{}".format(self.pdfsize[0]*self.zoom,self.pdfsize[1]*self.zoom))
+        self.root_exists = True
 
-    def extract_content_from_pdf(self):
+        # Knows whetever the windows is closed or not
+        def on_quit():
+            self.root_exists = False
+            self.root.destroy()
+
+        self.root.protocol("WM_DELETE_WINDOW", on_quit)
+
+    def extract_content_from_pdf(self, pageInformations):
         """
         Extract the content from pdf file
         Parameters
@@ -69,23 +129,23 @@ class RePDFer:
         pages_temp = []
         previous_page_id = 1
         previous_page_elements = []
-        i=0
+
+        print("Getting pages from pdf")
         for page_layout in extract_pages(self.pdf_path):
             page_elements = []
-            last_text = ""
+            date = ""
             for element in page_layout:
-                # Used to scrap the page id
-                if isinstance(element, pdfminer.layout.LTTextBoxHorizontal):
-                    last_text = element.get_text()
+                # Checks if the element is the page number and if it is, sets the date
+                if approx_tuple_equal(round_bbox(element.bbox), pageInformations["page_number"], 5):
+                    date = element.get_text()
 
-                # Adds every piece of the layout to the elements list
-                page_elements.append(element)
-                
-                # if i==78 : print(element)
-            
-            # Avoid duplicated pages by getting the last one showing before
-            # changing entirely
-            current_page_id = last_text.split(" / ")[0]
+                else:
+                    # Adds every piece of the layout to the elements list                
+                    page_elements.append(element)
+
+            # Avoid transition pages by getting the last one showing before
+            # changing to the next page 
+            current_page_id = date.split(" / ")[0]
             if current_page_id != previous_page_id:
                 previous_page_id = current_page_id
                 pages_temp.append(previous_page_elements)
@@ -94,7 +154,6 @@ class RePDFer:
             else:
                 previous_page_elements = page_elements
 
-            i+=1
 
         pages_temp.append(previous_page_elements)
 
@@ -102,12 +161,14 @@ class RePDFer:
 
         # Skips the defaults pages of every PDF's and get the content
         # out of every other pages
+        # print(self.page_to_skip)
+        print("Getting informations from pages")
         for page_layout in pages_temp[self.page_to_skip:]:
-            pages.append(self.extract_information_from_page(page_layout))
+            pages.append(self.extract_information_from_page(page_layout, pageInformations))
 
         return pages
 
-    def extract_information_from_page(self, page_layout):
+    def extract_information_from_page(self, page_layout, pageInformations):
         """
         Extract the usefull information from a page layout
         Parameters
@@ -148,31 +209,36 @@ class RePDFer:
                 # Changes bad encoding of all his PDF's
                 text = self.decode_text(element.get_text())
 
-                # Gets the title/subtitle/section of the current page
-                # to always know where this piece of text is going to
-                # be at the end
-                if round(element.bbox[2]) == TITLE_X1 and \
-                    round(element.bbox[3]) == TITLE_Y1:
-                    
-                    content["title"] = text
-
-                elif round(element.bbox[0]) == SUBTITLE_X0 and \
-                    round(element.bbox[1]) == SUBTITLE_Y0:
-
-                    content["subtitle"] = text
-
-                elif round(element.bbox[0]) == SECTION_X0 and \
-                    round(element.bbox[3]) == SECTION_Y1:
-
-                    content["section"] = text
-
+                # Todo : Find a way to enter definition in the pageInformations
+                #     instead of hardcoding it
+                # If the text is blue, it's a kind of definition
+                if (0.2, 0.2, 0.7) in fontinfo:
+                    content["texts"].append("> " + text)
+                
                 else:
-                    # If the text is blue, it's a kind of definition
-                    if (0.2, 0.2, 0.7) in fontinfo:
-                        content["texts"].append("> " + text)
-                    
-                    else:
-                        content["texts"].append(text)
+                    content["texts"].append(text)
+
+                # Checks if the text is a part of "defined" information 
+                # wanted/gave by the user such as the title, subtitle, unwanted
+                # information etc.
+                for section, value in pageInformations.items():
+                    if section == "unwanted_informations":
+                        for unwanted in value:
+                            if approx_tuple_equal(unwanted, round_bbox(element.bbox), 5):
+                                content["texts"].remove(text)
+
+                    else:   
+                        # Tests if the top left corner is almost the same or the bottom right is
+                        if (approximatily_equal(round_bbox(element.bbox)[0], value[0], 5) and \
+                        approximatily_equal(round_bbox(element.bbox)[1], value[1], 5)) or \
+                        (approximatily_equal(round_bbox(element.bbox)[2], value[2], 5) and \
+                        approximatily_equal(round_bbox(element.bbox)[3], value[3], 5)):
+                            # If the text is in the defined information, we need
+                            # to remove it from the text list because it was 
+                            # already added
+                            content[section] = text
+                            if text in content["texts"]:
+                                content["texts"].remove(text)
 
         return content
 
@@ -182,16 +248,16 @@ class RePDFer:
         :param text: text to decode
         :return: decoded text
         """
-        text = text.replace('`e', 'è')
-        text = text.replace('´e', 'é')
-        text = text.replace('`a', 'à')
-        text = text.replace('ˆa', 'â')
-        text = text.replace('ˆe', 'ê')
-        text = text.replace('ˆı', 'î')
-        text = text.replace('ˆo', 'ô')
-        text = text.replace('¸c', 'ç')
-        text = text.replace('`u', 'ù')
-        text = text.replace('ˆu', 'û')
+        text = text.replace('`e', 'è',)
+        text = text.replace('´e', 'é',)
+        text = text.replace('`a', 'à',)
+        text = text.replace('ˆa', 'â',)
+        text = text.replace('ˆe', 'ê',)
+        text = text.replace('ˆı', 'î',)
+        text = text.replace('ˆo', 'ô',)
+        text = text.replace('¸c', 'ç',)
+        text = text.replace('`u', 'ù',)
+        text = text.replace('ˆu', 'û',)
 
         text = text.replace('(cid:28) ', '"')
         text = text.replace(' (cid:29)', '"')
@@ -217,48 +283,136 @@ class RePDFer:
 
         return text
 
+    def askInformations(self):
+        """
+        Ask the user for the informations for a better anylizing 
+        of the page
+        Returns:
+            (dict) - Dict containing :
+                        - The place of the page numbers
+                        - The place of the page titles
+                        - The place of the page subtitles
+                        - The place of the page sections
+                        - Unwanted informations to remove
+        """
+        print("Asking informations from the PDF")
+
+        # Creates a temporary list of pages
+        extracted_pages = [x for x in extract_pages(self.pdf_path)]
+        page_elements = []
+
+        important_texts = []
+
+        # Questions to ask the user
+        questions = [
+            "Please click on the page number",
+            "Please click on the page title",
+            "Please click on the page subtitle",
+            "Please click on the page section",
+            "Please click on the unwanted informations until you're done & close the window",
+        ]
+
+        # Todo : Make the user choose the page he wants to ask the informations
+        #    because sometimes some pages does not have all the informations 
+        pageToAsk = 10
+
+        # Gets all the texts from the page and add them to the elements list
+        for element in extracted_pages[pageToAsk]:
+            if isinstance(element, pdfminer.layout.LTTextBoxHorizontal):
+                page_elements.append(element)
+
+        # Function called when the user clicks on a text
+        def callback(event):
+            # Gets the id of the text corresponding to the id of the 
+            # text in the page_elements list
+            id = int(event.widget.gettags("current")[0])
+
+            # Adds the text to the important_texts list
+            important_texts.append(page_elements[id])
+
+            # Ask the user the next question incoming the questions list
+            print(questions[
+                len(important_texts) if len(important_texts) < len(questions) 
+                else len(questions) - 1
+            ])
+
+        # Displays the page with extra rectangles to the user for it to click on
+        self.viewer.displayPageWithInformations(pageToAsk, page_elements, callback)
+
+        # Starts the question loop until it closes the window
+        print(questions[0])
+        while(self.root_exists):
+            self.root.update()
+
+        # Sorts informations saved by the user
+        pageinformations = {
+            "page_number": round_bbox(important_texts[0].bbox),
+            "title": round_bbox(important_texts[1].bbox),
+            "subtitle": round_bbox(important_texts[2].bbox),
+            "section": round_bbox(important_texts[3].bbox),
+            "unwanted_informations": [round_bbox(x.bbox) 
+                                        for x in important_texts[4:]],
+        }
+
+        # Tkinter loop to keep the window open
+        self.root.mainloop()
+
+        print("Thank u for the informations")
+        return pageinformations
+
+    def save_config(self, pageinformations:dict):
+        """
+        Save the informations in a json file
+        """
+        with open("config.json", "w") as f:
+            json.dump(pageinformations, f)
+
     def main(self):
         """
         Write the text in a file
         :param text: text to write
         :return: None
         """
-        pages = self.extract_content_from_pdf()
+        # Ask the user informations about the pdf in general so
+        # we can extract the text in a better way (avoid certain texts etc)
+        # but if the config file exists, we don't need to ask the user
+        if not os.path.exists("config.json"): 
+            pageInformations = self.askInformations()
+            self.save_config(pageInformations)
+        pageInformations = json.load(open("config.json", "r")) 
+        
+        # Extract the nectare from the pdf
+        pages = self.extract_content_from_pdf(pageInformations)
 
+        print("Writting output")
+
+        # Write the main title of the course in the file
         self.write_bigtitle(self.filename.upper())
 
-        # Create text in markdown
         for page in pages:
-            # Write titles/subtitles/sections when changing
-
             ## Avoid duplicated summuary after each title/subtitle
             if self.title_or_subtitle_changement(page): continue 
             
             self.section_changement(page)
-          
 
-            # Every thing that is NOT the last 4 string
-            # Which are the name of the teacher, the course subject
-            # the current page and the school  
             final_text = ""
-            for line in page["texts"][:-2]:
+            for line in page["texts"]:
                 # If there is an image
                 if "Figure" in line:
                     final_text += "\nIMAGE\n\n"
                     final_text += "*" + line[:-1] + "*\n\n"
 
-                # If it's something you have to know
+                # If it's something you have to know by heart
                 elif "♥" in line:
                     final_text += "\n**" + line[:-1] + "**\n\n"
 
                 else:
                     final_text += line.replace('\n', ' ') + '\n'
 
-                text = P(stylename=self.styles["Text"], text=final_text)
-            self.doc.text.addElement(text)
+            text = P(stylename=self.styles["Text"], text=final_text)
+            self.odtdoc.text.addElement(text)
 
-        # Creates final file
-        self.write_file(final_text)
+        print("Everything went well.")
 
     def write_bigtitle(self, text):
         """
@@ -270,7 +424,7 @@ class RePDFer:
             None
         """
         heading = H(outlinelevel=1, stylename=self.styles["BigTitle"], text=text)
-        self.doc.text.addElement(heading)
+        self.odtdoc.text.addElement(heading)
 
 
     def title_or_subtitle_changement(self, page):
@@ -278,7 +432,7 @@ class RePDFer:
         if self.writing_section["title"] != page["title"]:
             # Write the title in the odt file
             text = H(outlinelevel=2, stylename=self.styles["Title"], text=page["title"])
-            self.doc.text.addElement(text)
+            self.odtdoc.text.addElement(text)
 
             # Keep up to date the current title
             self.writing_section["title"] = page["title"]
@@ -287,7 +441,7 @@ class RePDFer:
         if self.writing_section["subtitle"] != page["subtitle"]:
             # Write the title in the odt file
             text = H(outlinelevel=3, stylename=self.styles["Subtitle"], text=page["title"])
-            self.doc.text.addElement(text)
+            self.odtdoc.text.addElement(text)
 
             # Keep up to date the current subtitle
             self.writing_section["subtitle"] = page["subtitle"]
@@ -302,37 +456,16 @@ class RePDFer:
             
             # Write the title in the odt file
             text = H(outlinelevel=4, stylename=self.styles["Section"], text=page["section"])
-            self.doc.text.addElement(text)
-        
-    def write_file(self, text):
-        """
-        Write the text in a file
-        Parameters:
-            text (string) -  text to write
-
-        Returns:
-            None
-        """
-        with open('output.md', 'w') as f:
-            f.write(text)
+            self.odtdoc.text.addElement(text)
 
     def close(self):
-        self.doc.save("output.odt")
+        self.odtdoc.save("output.odt")
         self.file.close()
-
-def execute():
-    # pdf_path = './linux.pdf'
-    pdf_path = '/media/Partage/Code/scrp-pdf/cpx_moy_amortie.pdf'
-    rePDFer = RePDFer(pdf_path)
-    # print(rePDFer.extract_text_from_pdf()[50])
-    rePDFer.main()
-    rePDFer.close()
-    rePDFer.doc.Dispose()
 
 if __name__ == '__main__':
     # pdf_path = './linux.pdf'
-    pdf_path = './cpx_moy_amortie.pdf'
+    # pdf_path = './slides_imperatif_et_types.pdf'
+    pdf_path = './pilesfiles.pdf'
     rePDFer = RePDFer(pdf_path)
-    # # print(rePDFer.extract_text_from_pdf()[50])
     rePDFer.main()
     rePDFer.close()
