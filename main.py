@@ -2,7 +2,7 @@
  Nom : Elowan
  Email : elowanh@yahoo.com
  Création : 12-01-2023 11:29:13
- Dernière modification : 11-02-2023 22:35:45
+ Dernière modification : 11-02-2023 23:53:26
 '''
 
 import pdfminer
@@ -87,6 +87,7 @@ class RePDFer:
             "Subtitle" : Style(name="Heading 2", family="paragraph"),
             "Section" : Style(name="Heading 3", family="paragraph"),
             "Text": Style(name="Paragraphe", family="paragraph"),
+            "Définition": Style(name="Définition", family="paragraph"),
         }
         
         # Get the resolution of the pdf
@@ -191,6 +192,7 @@ class RePDFer:
             "subtitle": "",
             "section": "",
             "code_section": "",
+            "definitions": []
         }
 
         for element in page_layout:
@@ -213,7 +215,8 @@ class RePDFer:
                 #     instead of hardcoding it
                 # If the text is blue, it's a kind of definition
                 if (0.2, 0.2, 0.7) in fontinfo:
-                    content["texts"].append("> " + text)
+                    if text != "":
+                        content["definitions"].append(text)
                 
                 else:
                     content["texts"].append(text)
@@ -225,7 +228,8 @@ class RePDFer:
                     if section == "unwanted_informations":
                         for unwanted in value:
                             if approx_tuple_equal(unwanted, round_bbox(element.bbox), 5):
-                                content["texts"].remove(text)
+                                if text in content["texts"]:
+                                    content["texts"].remove(text)
 
                     else:   
                         # Tests if the top left corner is almost the same or the bottom right is
@@ -386,14 +390,20 @@ class RePDFer:
 
         print("Writting output")
 
-        # Write the main title of the course in the file
-        self.write_bigtitle(self.filename.upper())
-
         for page in pages:
             ## Avoid duplicated summuary after each title/subtitle
             if self.title_or_subtitle_changement(page): continue 
             
             self.section_changement(page)
+
+            final_text = ""
+
+            for definition in page["definitions"]:
+                final_text += definition
+
+            if final_text != "":
+                text = P(stylename=self.styles["Définition"], text=final_text)
+                self.odtdoc.text.addElement(text)
 
             final_text = ""
             for line in page["texts"]:
@@ -413,19 +423,6 @@ class RePDFer:
             self.odtdoc.text.addElement(text)
 
         print("Everything went well.")
-
-    def write_bigtitle(self, text):
-        """
-        Write the title of the file
-        Parameters:
-            text (string) -  text to write
-
-        Returns:
-            None
-        """
-        heading = H(outlinelevel=1, stylename=self.styles["BigTitle"], text=text)
-        self.odtdoc.text.addElement(heading)
-
 
     def title_or_subtitle_changement(self, page):
         changed = False
@@ -464,8 +461,10 @@ class RePDFer:
 
 if __name__ == '__main__':
     # pdf_path = './linux.pdf'
-    # pdf_path = './slides_imperatif_et_types.pdf'
-    pdf_path = './pilesfiles.pdf'
+    pdf_path = './slides_imperatif_et_types.pdf'
+    # pdf_path = './pilesfiles.pdf'
+    # pdf_path = './cpx_moy_amortie.pdf'
+    pdf_path = './arbresbinaires.pdf'
     rePDFer = RePDFer(pdf_path)
     rePDFer.main()
     rePDFer.close()
