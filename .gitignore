@@ -1,6 +1,8 @@
 .venv
 *.pdf
 *.md
-output.odt
+output/*
+input/*
+__pycache__
 config.json
 *.pyc
