@@ -2,15 +2,11 @@
  Nom : Elowan
  Email : elowanh@yahoo.com
  Création : 12-01-2023 11:29:13
- Dernière modification : 28-02-2023 14:52:59
+ Dernière modification : 07-03-2023 13:56:29
 '''
 
 import pdfminer
 from pdfminer.high_level import extract_pages
-
-from odf.opendocument import load
-from odf.style import Style, TextProperties
-from odf.text import H, P, Span
 
 from pdfviewer import PDFViewer
 from tkinter import Tk
@@ -18,6 +14,9 @@ from tkinter import Tk
 import json
 import os
 import sys
+
+import libreoModule
+import markdownModule
 
 # Usefull functions
 def round_bbox(bbox):
@@ -66,32 +65,20 @@ def approx_tuple_equal(a, b, tolerance=5):
     return True
 
 class RePDFer:
-    def __init__(self, pdf_path, output_name="output", page_to_skip=2):
+    def __init__(self, pdf_path, output_name="output", page_to_skip=2, page_to_select=5):
         self.pdf_path = pdf_path
         self.page_to_skip = page_to_skip
+        self.page_to_select = page_to_select
+
+        # self.module = libreoModule.LibreOfficeModule(output_filename=output_name)
+        self.module = markdownModule.MarkdownModule(output_filename=output_name)
 
         self.file = open(pdf_path, 'rb')
         self.filename = pdf_path.split('/')[-1].split('.')[0]
         self.output_name = output_name
         self.parser = pdfminer.pdfparser.PDFParser(self.file)
         self.document = pdfminer.pdfdocument.PDFDocument(self.parser)
-        self.writing_section = {
-            "title": "",
-            "subtitle": "",
-            "section": "",
-        }
 
-        # Sets styles for the odt document
-        self.odtdoc = load("template.odt")
-        self.styles = {
-            "BigTitle" : Style(name="Title", family="paragraph"),
-            "Title" : Style(name="Heading 1", family="paragraph"),
-            "Subtitle" : Style(name="Heading 2", family="paragraph"),
-            "Section" : Style(name="Heading 3", family="paragraph"),
-            "Text": Style(name="Paragraphe", family="paragraph"),
-            "Définition": Style(name="Définition", family="paragraph"),
-        }
-        
         # Get the resolution of the pdf
         self.pdfsize = [x.mediabox for x in pdfminer.pdfpage.PDFPage.create_pages(self.document)][25]
         self.pdfsize = (round(self.pdfsize[2]), round(self.pdfsize[3]))
@@ -242,7 +229,7 @@ class RePDFer:
                             # If the text is in the defined information, we need
                             # to remove it from the text list because it was 
                             # already added
-                            content[section] = text
+                            content[section] = text.replace("\n", "")
                             if text in content["texts"]:
                                 content["texts"].remove(text)
 
@@ -318,12 +305,8 @@ class RePDFer:
             "Please click on the unwanted informations until you're done & close the window",
         ]
 
-        # Todo : Make the user choose the page he wants to ask the informations
-        #    because sometimes some pages does not have all the informations 
-        pageToAsk = 37
-
         # Gets all the texts from the page and add them to the elements list
-        for element in extracted_pages[pageToAsk]:
+        for element in extracted_pages[self.page_to_select]:
             if isinstance(element, pdfminer.layout.LTTextBoxHorizontal):
                 page_elements.append(element)
 
@@ -343,7 +326,7 @@ class RePDFer:
             ])
 
         # Displays the page with extra rectangles to the user for it to click on
-        self.viewer.displayPageWithInformations(pageToAsk, page_elements, callback)
+        self.viewer.displayPageWithInformations(self.page_to_select, page_elements, callback)
 
         # Starts the question loop until it closes the window
         print(questions[0])
@@ -391,74 +374,10 @@ class RePDFer:
         pages = self.extract_content_from_pdf(pageInformations)
 
         print("Writting output")
-
-        for page in pages:
-            ## Avoid duplicated summuary after each title/subtitle
-            if self.title_or_subtitle_changement(page): continue 
-            
-            self.section_changement(page)
-
-            final_text = ""
-
-            for definition in page["definitions"]:
-                final_text += definition
-
-            if final_text != "":
-                text = P(stylename=self.styles["Définition"], text=final_text)
-                self.odtdoc.text.addElement(text)
-
-            final_text = ""
-            for line in page["texts"]:
-                # If there is an image
-                if "Figure" in line:
-                    final_text += "\nIMAGE\n\n"
-                    final_text += "*" + line[:-1] + "*\n\n"
-
-                # If it's something you have to know by heart
-                elif "♥" in line:
-                    final_text += "\n**" + line[:-1] + "**\n\n"
-
-                else:
-                    final_text += line.replace('\n', ' ') + '\n'
-
-            text = P(stylename=self.styles["Text"], text=final_text)
-            self.odtdoc.text.addElement(text)
-
-        print("Everything went well.")
-
-    def title_or_subtitle_changement(self, page):
-        changed = False
-        if self.writing_section["title"] != page["title"]:
-            # Write the title in the odt file
-            text = H(outlinelevel=2, stylename=self.styles["Title"], text=page["title"])
-            self.odtdoc.text.addElement(text)
-
-            # Keep up to date the current title
-            self.writing_section["title"] = page["title"]
-            changed = True
-
-        if self.writing_section["subtitle"] != page["subtitle"]:
-            # Write the title in the odt file
-            text = H(outlinelevel=3, stylename=self.styles["Subtitle"], text=page["title"])
-            self.odtdoc.text.addElement(text)
-
-            # Keep up to date the current subtitle
-            self.writing_section["subtitle"] = page["subtitle"]
-            changed = True
-        
-        return changed
-
-    def section_changement(self, page):
-        if self.writing_section["section"] != page["section"]:
-            # Keep up to date the current section
-            self.writing_section["section"] = page["section"]
-            
-            # Write the title in the odt file
-            text = H(outlinelevel=4, stylename=self.styles["Section"], text=page["section"])
-            self.odtdoc.text.addElement(text)
+        self.module.main(pages)
 
     def close(self):
-        self.odtdoc.save(self.output_name + ".odt")
+        self.module.close()
         self.file.close()
 
 if __name__ == '__main__':

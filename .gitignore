@@ -3,6 +3,7 @@
 *.md
 output/*
 input/*
+images/*
 __pycache__
 config.json
 *.pyc
