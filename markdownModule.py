@@ -39,7 +39,10 @@ class MarkdownModule:
             final_text = ""
 
             for definition in page["definitions"]:
-                self.mdFile.new_paragraph(text='!!! quote "Définition"\n    ' + definition)
+                if "Figure" in definition:
+                    self.mdFile.new_paragraph(text='_' + definition.strip() + '_')
+                else:
+                    self.mdFile.new_paragraph(text='!!! quote "Définition"\n    ' + definition)
 
             if final_text != "":
                 self.mdFile.new_paragraph(text=final_text)
@@ -56,7 +59,7 @@ class MarkdownModule:
                     final_text += "\n**" + line[:-1] + "**\n\n"
 
                 else:
-                    final_text += line.replace('\n', ' ') + '\n'
+                    final_text += line.replace('\n', '  ') + '\n'  # 2 espace a la fin d'une ligne permet de faire un saut de ligne sans nouveau paragraphe en md
 
             self.add_paragraph(text=final_text)
 
