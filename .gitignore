@@ -8,3 +8,4 @@ tmpimages/*
 __pycache__
 config.json
 *.pyc
+pdfs/*

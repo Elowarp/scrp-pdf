@@ -6,6 +6,7 @@
 '''
 
 import hashlib
+import pdf2image
 import pdfminer
 from pdfminer.high_level import extract_pages
 from pdfminer.image import ImageWriter
@@ -123,7 +124,7 @@ class RePDFer:
         previous_page_elements = []
 
         print("Getting pages from pdf")
-        for page_layout in extract_pages(self.pdf_path):
+        for page_layout, page_image in zip(extract_pages(self.pdf_path), pdf2image.convert_from_path(self.pdf_path)):
             page_elements = []
             date = ""
             for element in page_layout:
@@ -141,10 +142,10 @@ class RePDFer:
             if current_page_id != previous_page_id:
                 previous_page_id = current_page_id
                 pages_temp.append(previous_page_elements)
-                previous_page_elements = page_elements
+                previous_page_elements = page_elements, page_image
 
             else:
-                previous_page_elements = page_elements
+                previous_page_elements = page_elements, page_image
 
 
         pages_temp.append(previous_page_elements)
@@ -155,12 +156,12 @@ class RePDFer:
         # out of every other pages
         # print(self.page_to_skip)
         print("Getting informations from pages")
-        for page_layout in pages_temp[self.page_to_skip:]:
-            pages.append(self.extract_information_from_page(page_layout, pageInformations))
+        for page_layout, page_image in pages_temp[self.page_to_skip:]:
+            pages.append(self.extract_information_from_page(page_layout, pageInformations, page_image))
 
         return pages
 
-    def extract_information_from_page(self, page_layout, pageInformations):
+    def extract_information_from_page(self, page_layout, pageInformations, page_image):
         """
         Extract the usefull information from a page layout
         Parameters
@@ -185,6 +186,7 @@ class RePDFer:
             "code_section": "",
             "definitions": []
         }
+
 
         for element in page_layout:
             if isinstance(element, pdfminer.layout.LTTextBoxHorizontal):
@@ -263,6 +265,24 @@ class RePDFer:
                         # Il faut surement ajouter un truc dans content["texte"]
                         content["images"].append(filename+".bmp")
                         content["texts"].append(f"IMAGE: ![Texte alternatif](images/{filename}.bmp)")
+                    else:
+                        a,b,c,d = element.bbox
+                        x1, y1, x2, y2 = a*1008/362.834, b*756/272.1255, c*1008/362, d*756/272.1255
+                        delta = 200  # Je sais pas pk il faut ça...
+                        image_data = page_image.crop((x1, y1+delta,x2, y2+delta))
+                        image_data.save("tmpimages/tempimg.bmp", format="bmp")
+                        filename = hashlib.md5(open("tmpimages/tempimg.bmp", 'rb').read()).hexdigest()
+                        # Bouge l'image du dossier tmpimages au dossier images (Il doit exsister)
+                        with open("images/"+filename+".bmp", "wb") as f:
+                            f.write(open("tmpimages/tempimg.bmp", 'rb').read())
+
+                        # Ajoute le hash(le nom de l'image) dans content image
+                        # Tu te demerde avec ça
+                        # Il faut surement ajouter un truc dans content["texte"]
+                        content["images"].append(filename+".bmp")
+                        content["texts"].append(f"IMAGEV2: ![Texte alternatif](images/{filename}.bmp)")
+
+
 
 
                     
