@@ -1,10 +1,8 @@
 '''
- Nom : Elowan
- Email : elowanh@yahoo.com
- Création : 12-01-2023 11:29:13
- Dernière modification : 07-03-2023 13:56:29
+ Name : Elowan
+ Creation : 28-02-2023 14:49:58
+ Last modified : 07-03-2023 14:14:38
 '''
-
 import pdfminer
 from pdfminer.high_level import extract_pages
 
