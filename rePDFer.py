@@ -199,7 +199,7 @@ class RePDFer:
                 for line in element:
                     for character in line:
                         if isinstance(character, pdfminer.layout.LTChar):
-                            # fontinfo.add(character.fontname)
+                            fontinfo.add(character.fontname)
                             # fontinfo.add(character.size)
                             fontinfo.add(character.graphicstate.scolor)
                             fontinfo.add(character.graphicstate.ncolor)
@@ -211,7 +211,9 @@ class RePDFer:
                 accent_grave = "<accent_grave>"
 
                 # Explique ça espece de gros fdp
-                text = ''.join([''.join([f'{accent_grave}{char.get_text()}{accent_grave}' if isinstance(char, pdfminer.layout.LTChar) and char.fontname == 'TIXCET+CMTT10' else char.get_text() for char in line]) for line in element]).replace(accent_grave+accent_grave, "").replace(accent_grave+" "+accent_grave, " ")
+                # text = ''.join([''.join([f'{accent_grave}{char.get_text()}{accent_grave}' if isinstance(char, pdfminer.layout.LTChar) and char.fontname == 'TIXCET+CMTT10' else char.get_text() for char in line]) for line in element]).replace(accent_grave+accent_grave, "").replace(accent_grave+" "+accent_grave, " ")
+                code,text = self.concat_code_blocks(element)
+                
                 """
                 text = ""
                 for line in element:
@@ -243,7 +245,8 @@ class RePDFer:
 
 
                 text = self.decode_text(text)
-                print(text)
+                
+                
 
                 # Todo : Find a way to enter definition in the pageInformations
                 #     instead of hardcoding it
@@ -251,9 +254,9 @@ class RePDFer:
                 if (0.2, 0.2, 0.7) in fontinfo:
                     if text != "":
                         content["definitions"].append(text)
-                
                 else:
                     content["texts"].append(text)
+                    content["code_section"] += code
 
                 # Checks if the text is a part of "defined" information 
                 # wanted/gave by the user such as the title, subtitle, unwanted
@@ -332,6 +335,31 @@ class RePDFer:
 
         return content
 
+    def concat_code_blocks(self,element):
+        text = ""
+        code = ""
+        for line in element:
+            flag = False
+            flag_num = True
+            for char in line:
+                if isinstance(char, pdfminer.layout.LTChar):
+                    if  'CMTT9' in char.fontname:
+                        code += char.get_text()
+                        flag = True
+                    elif 'CMSS8' in char.fontname:
+                        flag_num = False
+                        pass
+                    else:
+                        flag = False
+                        text += char.get_text()
+                elif isinstance(char, pdfminer.layout.LTAnno):
+                    if flag and  flag_num:
+                        code += char.get_text()
+                    elif not flag and  flag_num:
+                        text += char.get_text()
+        return code, text
+    
+    
     def decode_text(self, text):
         """
         Decode the text from the pdf
@@ -516,7 +544,7 @@ class RePDFer:
         # Ask the user informations about the pdf in general so
         # we can extract the text in a better way (avoid certain texts etc)
         # but if the config file exists, we don't need to ask the user
-        # self.debugInfo()
+        # self.debugInfo()s
         if not os.path.exists("config.json"): 
             pageInformations = self.askInformations()
             self.save_config(pageInformations)
@@ -524,7 +552,7 @@ class RePDFer:
         
         # Extract the nectare from the pdf
         pages = self.extract_content_from_pdf(pageInformations)
-
+        print(pages)
         print("Writting output")
         self.module.main(pages)
         print("Weird_char : ", WEIRD_CHAR)
