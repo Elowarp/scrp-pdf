@@ -1,6 +1,5 @@
 .venv
 *.pdf
-*.md
 output/*
 input/*
 images/*

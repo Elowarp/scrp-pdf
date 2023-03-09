@@ -1,8 +1,7 @@
 '''
- Nom : Elowan
- Email : elowanh@yahoo.com
- Création : 12-01-2023 11:29:13
- Dernière modification : 07-03-2023 13:56:29
+ Name : Elowan
+ Creation : 28-02-2023 14:49:58
+ Last modified : 07-03-2023 14:14:38
 '''
 
 import hashlib
@@ -300,7 +299,6 @@ class RePDFer:
                         # Tu te demerde avec ça
                         # Il faut surement ajouter un truc dans content["texte"]
                         content["images"].append(filename+".bmp")
-                        content["texts"].append(f"IMAGE: ![Texte alternatif](images/{filename}.bmp)")
                     else:
                         a,b,c,d = element.bbox
                         x1, y1, x2, y2 = a*1008/362.834, b*756/272.1255, c*1008/362, d*756/272.1255

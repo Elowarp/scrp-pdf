@@ -1,7 +1,7 @@
 '''
  Nom : Elowan
  Création : 07-03-2023 12:50:30
- Dernière modification : 07-03-2023 13:59:06
+ Dernière modification : 09-03-2023 11:19:40
 '''
 from mdutils.mdutils import MdUtils
 
@@ -9,7 +9,7 @@ class MarkdownModule:
     def __init__(self, output_filename):
         self.output_filename = output_filename  
 
-        self.mdFile = MdUtils(file_name=self.output_filename, title="AutoCours")
+        self.mdFile = MdUtils(file_name=self.output_filename, title=output_filename.split("/")[-1])
         self.write_template()
 
         self.writing_section = {
@@ -38,6 +38,12 @@ class MarkdownModule:
 
             final_text = ""
 
+            # If there is an image
+            if page["images"] != []:
+                for image in page["images"]:
+                    self.mdFile.write("<p align='center'><img src='/images/" + image + "'/></p>")
+                    pass
+
             for definition in page["definitions"]:
                 if "Figure" in definition:
                     self.mdFile.new_paragraph(text='_' + definition.strip() + '_')
@@ -49,13 +55,8 @@ class MarkdownModule:
 
             final_text = ""
             for line in page["texts"]:
-                # If there is an image
-                if "Figure" in line:
-                    final_text += "\nIMAGE\n\n"
-                    final_text += "*" + line[:-1] + "*\n\n"
-
                 # If it's something you have to know by heart
-                elif "♥" in line:
+                if "♥" in line:
                     final_text += "\n**" + line[:-1] + "**\n\n"
 
                 else:
