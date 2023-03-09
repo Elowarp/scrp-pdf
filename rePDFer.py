@@ -3,8 +3,12 @@
  Creation : 28-02-2023 14:49:58
  Last modified : 07-03-2023 14:14:38
 '''
+
+import hashlib
+import pdf2image
 import pdfminer
 from pdfminer.high_level import extract_pages
+from pdfminer.image import ImageWriter
 
 from pdfviewer import PDFViewer
 from tkinter import Tk
@@ -119,7 +123,7 @@ class RePDFer:
         previous_page_elements = []
 
         print("Getting pages from pdf")
-        for page_layout in extract_pages(self.pdf_path):
+        for page_layout, page_image in zip(extract_pages(self.pdf_path), pdf2image.convert_from_path(self.pdf_path)):
             page_elements = []
             date = ""
             for element in page_layout:
@@ -137,10 +141,10 @@ class RePDFer:
             if current_page_id != previous_page_id:
                 previous_page_id = current_page_id
                 pages_temp.append(previous_page_elements)
-                previous_page_elements = page_elements
+                previous_page_elements = page_elements, page_image
 
             else:
-                previous_page_elements = page_elements
+                previous_page_elements = page_elements, page_image
 
 
         pages_temp.append(previous_page_elements)
@@ -151,12 +155,12 @@ class RePDFer:
         # out of every other pages
         # print(self.page_to_skip)
         print("Getting informations from pages")
-        for page_layout in pages_temp[self.page_to_skip:]:
-            pages.append(self.extract_information_from_page(page_layout, pageInformations))
+        for page_layout, page_image in pages_temp[self.page_to_skip:]:
+            pages.append(self.extract_information_from_page(page_layout, pageInformations, page_image))
 
         return pages
 
-    def extract_information_from_page(self, page_layout, pageInformations):
+    def extract_information_from_page(self, page_layout, pageInformations, page_image):
         """
         Extract the usefull information from a page layout
         Parameters
@@ -181,6 +185,7 @@ class RePDFer:
             "code_section": "",
             "definitions": []
         }
+
 
         for element in page_layout:
             if isinstance(element, pdfminer.layout.LTTextBoxHorizontal):
@@ -230,6 +235,55 @@ class RePDFer:
                             content[section] = text.replace("\n", "")
                             if text in content["texts"]:
                                 content["texts"].remove(text)
+            elif isinstance(element, pdfminer.layout.LTFigure):
+                # Nom de fonction assez explicite mais sinon: Récuperer l'Image Depuis Une Figure, revoie None si c'est pas une Image.
+                def recGetImageInFigure(element):
+                    if isinstance(element, pdfminer.layout.LTFigure):
+                        return recGetImageInFigure(element._objs[0])
+                    if isinstance(element, pdfminer.layout.LTImage):
+                        return element
+                    return None    # Graph
+
+                if "Im" in str(element):  # Im, permet de ne pas avoir les Figures de type trait ou circle
+                    print("Si t'a une erreur Juste apres ce message alors il faut crée le dossier tmpimages et images")
+                    image = recGetImageInFigure(element)
+                    # Si c'est bien une image
+                    if isinstance(image, pdfminer.layout.LTImage):
+                        # Enregistre dans le dossier tmpimages (Attention: Il doit exsister)
+                        imageWriter = ImageWriter("tmpimages")
+                        tmpfilename = imageWriter.export_image(image=image)
+
+                        # Recupere le hash md5 de l'image
+                        filename = hashlib.md5(open("tmpimages/"+tmpfilename, 'rb').read()).hexdigest()
+                        # Bouge l'image du dossier tmpimages au dossier images (Il doit exsister)
+                        with open("images/"+filename+".bmp", "wb") as f:
+                            f.write(open("tmpimages/"+tmpfilename, 'rb').read())
+
+                        # Ajoute le hash(le nom de l'image) dans content image
+                        # Tu te demerde avec ça
+                        # Il faut surement ajouter un truc dans content["texte"]
+                        content["images"].append(filename+".bmp")
+                    else:
+                        a,b,c,d = element.bbox
+                        x1, y1, x2, y2 = a*1008/362.834, b*756/272.1255, c*1008/362, d*756/272.1255
+                        delta = 200  # Je sais pas pk il faut ça...
+                        image_data = page_image.crop((x1, y1+delta,x2, y2+delta))
+                        image_data.save("tmpimages/tempimg.bmp", format="bmp")
+                        filename = hashlib.md5(open("tmpimages/tempimg.bmp", 'rb').read()).hexdigest()
+                        # Bouge l'image du dossier tmpimages au dossier images (Il doit exsister)
+                        with open("images/"+filename+".bmp", "wb") as f:
+                            f.write(open("tmpimages/tempimg.bmp", 'rb').read())
+
+                        # Ajoute le hash(le nom de l'image) dans content image
+                        # Tu te demerde avec ça
+                        # Il faut surement ajouter un truc dans content["texte"]
+                        content["images"].append(filename+".bmp")
+                        content["texts"].append(f"IMAGEV2: ![Texte alternatif](images/{filename}.bmp)")
+
+
+
+
+                    
 
         return content
 
@@ -273,6 +327,50 @@ class RePDFer:
 
 
         return text
+
+
+    def debugInfo(self):
+        """
+        Permet de savoir quel type de data sur la page donnée
+        """
+        print("Debug Infos from the PDF")
+
+        # Creates a temporary list of pages
+        extracted_pages = [x for x in extract_pages(self.pdf_path)]
+        page_elements = []
+
+        important_texts = []
+
+        # Questions to ask the user
+
+        # Gets all the texts from the page and add them to the elements list
+        for element in extracted_pages[self.page_to_select]:
+            page_elements.append(element)
+
+        # Function called when the user clicks on a text
+        def callback(event):
+            # Gets the id of the text corresponding to the id of the 
+            # text in the page_elements list
+            id = int(event.widget.gettags("current")[0])
+
+            # Adds the text to the important_texts list
+            important_texts.append(page_elements[id])
+
+            # Ask the user the next question incoming the questions list
+            print(page_elements[int(event.widget.gettags("current")[0])], event.widget.gettags("current"))
+
+        # Displays the page with extra rectangles to the user for it to click on
+        self.viewer.displayPageWithInformations(self.page_to_select, page_elements, callback)
+
+        # Starts the question loop until it closes the window
+        while(self.root_exists):
+            self.root.update()
+
+        # Tkinter loop to keep the window open
+        self.root.mainloop()
+
+        print("Thank u for the debug")
+        return None 
 
     def askInformations(self):
         """
@@ -363,6 +461,7 @@ class RePDFer:
         # Ask the user informations about the pdf in general so
         # we can extract the text in a better way (avoid certain texts etc)
         # but if the config file exists, we don't need to ask the user
+        # self.debugInfo()
         if not os.path.exists("config.json"): 
             pageInformations = self.askInformations()
             self.save_config(pageInformations)

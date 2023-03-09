@@ -1,7 +1,7 @@
 '''
  Nom : Elowan
  Création : 07-03-2023 12:50:30
- Dernière modification : 07-03-2023 13:59:06
+ Dernière modification : 09-03-2023 10:56:57
 '''
 from mdutils.mdutils import MdUtils
 
@@ -38,25 +38,29 @@ class MarkdownModule:
 
             final_text = ""
 
+            # If there is an image
+            if page["images"] != []:
+                for image in page["images"]:
+                    self.mdFile.write("<p align='center'><img src='/images/" + image + "'/></p>")
+                    pass
+
             for definition in page["definitions"]:
-                self.mdFile.new_paragraph(text='!!! quote "Définition"\n    ' + definition)
+                if "Figure" in definition:
+                    self.mdFile.new_paragraph(text='_' + definition.strip() + '_')
+                else:
+                    self.mdFile.new_paragraph(text='!!! quote "Définition"\n    ' + definition)
 
             if final_text != "":
                 self.mdFile.new_paragraph(text=final_text)
 
             final_text = ""
             for line in page["texts"]:
-                # If there is an image
-                if "Figure" in line:
-                    final_text += "\nIMAGE\n\n"
-                    final_text += "*" + line[:-1] + "*\n\n"
-
                 # If it's something you have to know by heart
-                elif "♥" in line:
+                if "♥" in line:
                     final_text += "\n**" + line[:-1] + "**\n\n"
 
                 else:
-                    final_text += line.replace('\n', ' ') + '\n'
+                    final_text += line.replace('\n', '  ') + '\n'  # 2 espace a la fin d'une ligne permet de faire un saut de ligne sans nouveau paragraphe en md
 
             self.add_paragraph(text=final_text)
 
