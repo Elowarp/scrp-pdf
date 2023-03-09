@@ -68,13 +68,16 @@ def approx_tuple_equal(a, b, tolerance=5):
     return True
 
 class RePDFer:
-    def __init__(self, pdf_path, output_name="output", page_to_skip=2, page_to_select=5):
+    def __init__(self, pdf_path, output_name="output", page_to_skip=2, page_to_select=5, module="markdown"):
         self.pdf_path = pdf_path
         self.page_to_skip = page_to_skip
         self.page_to_select = page_to_select
 
-        # self.module = libreoModule.LibreOfficeModule(output_filename=output_name)
-        self.module = markdownModule.MarkdownModule(output_filename=output_name)
+        # Selecting the module
+        if module == "libreoffice":
+            self.module = libreoModule.LibreOfficeModule(output_filename=output_name)
+        elif module == "markdown":
+            self.module = markdownModule.MarkdownModule(output_filename=output_name)
 
         self.file = open(pdf_path, 'rb')
         self.filename = pdf_path.split('/')[-1].split('.')[0]
@@ -83,7 +86,7 @@ class RePDFer:
         self.document = pdfminer.pdfdocument.PDFDocument(self.parser)
 
         # Get the resolution of the pdf
-        self.pdfsize = [x.mediabox for x in pdfminer.pdfpage.PDFPage.create_pages(self.document)][3]
+        self.pdfsize = [x.mediabox for x in pdfminer.pdfpage.PDFPage.create_pages(self.document)][page_to_select]
         self.pdfsize = (round(self.pdfsize[2]), round(self.pdfsize[3]))
 
         # Creating the window
@@ -189,6 +192,7 @@ class RePDFer:
 
 
         for element in page_layout:
+            # If the element is a text
             if isinstance(element, pdfminer.layout.LTTextBoxHorizontal):
                 # Gets the font info of the current text
                 fontinfo = set()
@@ -205,6 +209,8 @@ class RePDFer:
 
                 # Changes bad encoding of all his PDF's
                 accent_grave = "<accent_grave>"
+
+                # Explique ça espece de gros fdp
                 text = ''.join([''.join([f'{accent_grave}{char.get_text()}{accent_grave}' if isinstance(char, pdfminer.layout.LTChar) and char.fontname == 'TIXCET+CMTT10' else char.get_text() for char in line]) for line in element]).replace(accent_grave+accent_grave, "").replace(accent_grave+" "+accent_grave, " ")
                 """
                 text = ""
@@ -271,6 +277,8 @@ class RePDFer:
                             content[section] = text.replace("\n", "")
                             if text in content["texts"]:
                                 content["texts"].remove(text)
+
+            # If the element is an image / figure
             elif isinstance(element, pdfminer.layout.LTFigure):
                 # Nom de fonction assez explicite mais sinon: Récuperer l'Image Depuis Une Figure, revoie None si c'est pas une Image.
                 def recGetImageInFigure(element):
@@ -280,46 +288,47 @@ class RePDFer:
                         return element
                     return None    # Graph
 
-                if "Im" in str(element):  # Im, permet de ne pas avoir les Figures de type trait ou circle
-                    print("Si t'a une erreur Juste apres ce message alors il faut crée le dossier tmpimages et images")
+                # Checks if the element is named as an image by the 'Im' prefix
+                if "Im" in str(element):
                     image = recGetImageInFigure(element)
-                    # Si c'est bien une image
+                    
+                    # If the element is finally an image
                     if isinstance(image, pdfminer.layout.LTImage):
-                        # Enregistre dans le dossier tmpimages (Attention: Il doit exsister)
+                        # Save it in the temporary folder tmpimages
                         imageWriter = ImageWriter("tmpimages")
                         tmpfilename = imageWriter.export_image(image=image)
 
-                        # Recupere le hash md5 de l'image
+                        # Creates an hash of the image and sets it as the name of
+                        # the final image saved (in the folder images)
                         filename = hashlib.md5(open("tmpimages/"+tmpfilename, 'rb').read()).hexdigest()
-                        # Bouge l'image du dossier tmpimages au dossier images (Il doit exsister)
+
                         with open("images/"+filename+".bmp", "wb") as f:
                             f.write(open("tmpimages/"+tmpfilename, 'rb').read())
 
-                        # Ajoute le hash(le nom de l'image) dans content image
-                        # Tu te demerde avec ça
-                        # Il faut surement ajouter un truc dans content["texte"]
+                        # Adds the image hash (so the image name) to the image list
+                        # of the current page
                         content["images"].append(filename+".bmp")
+
+                    # If it's not an image, we take a screenshot and save it as 
+                    # a new image
                     else:
                         a,b,c,d = element.bbox
                         x1, y1, x2, y2 = a*1008/362.834, b*756/272.1255, c*1008/362, d*756/272.1255
                         delta = 200  # Je sais pas pk il faut ça...
+
+                        # Screenshot the image
                         image_data = page_image.crop((x1, y1+delta,x2, y2+delta))
                         image_data.save("tmpimages/tempimg.bmp", format="bmp")
+
+                        # Creates an unique hash from the content of the image and 
+                        # sets it as the name of the final image saved (in the image folder)
                         filename = hashlib.md5(open("tmpimages/tempimg.bmp", 'rb').read()).hexdigest()
-                        # Bouge l'image du dossier tmpimages au dossier images (Il doit exsister)
                         with open("images/"+filename+".bmp", "wb") as f:
                             f.write(open("tmpimages/tempimg.bmp", 'rb').read())
 
-                        # Ajoute le hash(le nom de l'image) dans content image
-                        # Tu te demerde avec ça
-                        # Il faut surement ajouter un truc dans content["texte"]
+                        # Adds the image hash (so the image name) to the image list
+                        # of the current page
                         content["images"].append(filename+".bmp")
-                        content["texts"].append(f"IMAGEV2: ![Texte alternatif](images/{filename}.bmp)")
-
-
-
-
-                    
 
         return content
 
@@ -527,7 +536,7 @@ class RePDFer:
 if __name__ == '__main__':
     argv = sys.argv
     pdf_path = "input/linux.pdf"
-    output_name = "output/AutoCours - Linux"
+    output_name = "Linux"
     rePDFer = RePDFer(pdf_path, output_name)
     rePDFer.main()
     rePDFer.close()

@@ -19,6 +19,9 @@ class MarkdownModule:
         }
 
     def write_template(self):
+        """
+        Write the template text in the output file
+        """
         with open("template.md", "r", encoding="utf-8") as file:
             text = file.read()
             self.mdFile.write(text=text)
