@@ -7,7 +7,7 @@ parser.add_argument("-o", "--output", help="output file", type=str, default="out
 parser.add_argument("-p", "--pages", help="number of pages to skip at the beginning of the pdf", type=int, default=1)
 parser.add_argument("-s", "--select", help="page index to ask informations about title/subtitle/section ", type=int, default=5)
 args = parser.parse_args()
-output_name = "output/AutoCours - " + args.output
+output_name = "output/" + args.output
 
 rePDFer = RePDFer(args.file, output_name, args.pages, args.select)
 rePDFer.main()

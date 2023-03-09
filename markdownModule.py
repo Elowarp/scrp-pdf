@@ -1,7 +1,7 @@
 '''
  Nom : Elowan
  Création : 07-03-2023 12:50:30
- Dernière modification : 09-03-2023 10:56:57
+ Dernière modification : 09-03-2023 11:19:40
 '''
 from mdutils.mdutils import MdUtils
 
@@ -9,7 +9,7 @@ class MarkdownModule:
     def __init__(self, output_filename):
         self.output_filename = output_filename  
 
-        self.mdFile = MdUtils(file_name=self.output_filename, title="AutoCours")
+        self.mdFile = MdUtils(file_name=self.output_filename, title=output_filename.split("/")[-1])
         self.write_template()
 
         self.writing_section = {
