@@ -20,6 +20,7 @@ import sys
 
 import libreoModule
 import markdownModule
+WEIRD_CHAR = set()
 
 # Usefull functions
 def round_bbox(bbox):
@@ -83,7 +84,7 @@ class RePDFer:
         self.document = pdfminer.pdfdocument.PDFDocument(self.parser)
 
         # Get the resolution of the pdf
-        self.pdfsize = [x.mediabox for x in pdfminer.pdfpage.PDFPage.create_pages(self.document)][25]
+        self.pdfsize = [x.mediabox for x in pdfminer.pdfpage.PDFPage.create_pages(self.document)][3]
         self.pdfsize = (round(self.pdfsize[2]), round(self.pdfsize[3]))
 
         # Creating the window
@@ -199,10 +200,45 @@ class RePDFer:
                             # fontinfo.add(character.size)
                             fontinfo.add(character.graphicstate.scolor)
                             fontinfo.add(character.graphicstate.ncolor)
+                            if len(character.get_text()) > 1:
+                                WEIRD_CHAR.add(character.get_text())
 
 
                 # Changes bad encoding of all his PDF's
-                text = self.decode_text(element.get_text())
+                accent_grave = "<accent_grave>"
+                text = ''.join([''.join([f'{accent_grave}{char.get_text()}{accent_grave}' if isinstance(char, pdfminer.layout.LTChar) and char.fontname == 'TIXCET+CMTT10' else char.get_text() for char in line]) for line in element]).replace(accent_grave+accent_grave, "").replace(accent_grave+" "+accent_grave, " ")
+                """
+                text = ""
+                for line in element:
+                    is_code_block = False
+                    for char in line:
+                        if is_code_block:
+                            if isinstance(char, pdfminer.layout.LTChar):
+                                if char.fontname == 'TIXCET+CMTT10':
+                                    text += char.get_text()
+                                else:
+                                    text += char.get_text() + accent_grave
+                                    is_code_block = False
+                            else:
+                                text += " "
+                        else:
+                            if isinstance(char, pdfminer.layout.LTChar):
+                                if char.fontname == 'TIXCET+CMTT10':
+                                    text = text.strip()+accent_grave+" "+char.get_text()
+                                    is_code_block = True 
+                                else:
+                                    text += char.get_text()
+                            else:
+                                text += " "
+                    if is_code_block:
+                        text = text.strip()+accent_grave
+                """ 
+
+                            
+
+
+                text = self.decode_text(text)
+                print(text)
 
                 # Todo : Find a way to enter definition in the pageInformations
                 #     instead of hardcoding it
@@ -326,6 +362,7 @@ class RePDFer:
         text = text.replace('(cid:80)', '{sum symbol}') 
         text = text.replace('(cid:39)', '~=') 
         text = text.replace(' (cid:48)', "'") 
+        text = text.replace("<accent_grave>", "`")
 
 
         return text
@@ -359,7 +396,16 @@ class RePDFer:
             important_texts.append(page_elements[id])
 
             # Ask the user the next question incoming the questions list
-            print(page_elements[int(event.widget.gettags("current")[0])], event.widget.gettags("current"))
+            def get_inside(elt, height=0):
+                print("\t"*height, elt)
+                if isinstance(elt, pdfminer.layout.LTTextBox):
+                    for i in elt._objs:
+                        get_inside(i, height+1)
+                if isinstance(elt, pdfminer.layout.LTTextLineHorizontal):
+                    for i in elt._objs:
+                        get_inside(i, height+1)
+            get_inside(page_elements[int(event.widget.gettags("current")[0])])
+
 
         # Displays the page with extra rectangles to the user for it to click on
         self.viewer.displayPageWithInformations(self.page_to_select, page_elements, callback)
@@ -474,6 +520,7 @@ class RePDFer:
 
         print("Writting output")
         self.module.main(pages)
+        print("Weird_char : ", WEIRD_CHAR)
 
     def close(self):
         self.module.close()

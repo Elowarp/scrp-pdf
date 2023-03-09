@@ -9,3 +9,4 @@ __pycache__
 config.json
 *.pyc
 pdfs/*
+.DS_Store/*
