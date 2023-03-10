@@ -54,7 +54,7 @@ class MarkdownModule:
                     self.mdFile.new_paragraph(text='!!! quote "Définition"\n    ' + definition)
 
             if page["code_section"] != "":
-                self.mdFile.new_paragraph(text='```\n'+ page["code_section"]+'```')            
+                self.mdFile.new_paragraph(text='```linenums="1"\n'+ page["code_section"]+'```')            
             
             
             if final_text != "":

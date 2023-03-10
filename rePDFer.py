@@ -245,6 +245,7 @@ class RePDFer:
 
 
                 text = self.decode_text(text)
+                code = self.decode_text(code)
                 
                 
 
@@ -340,22 +341,24 @@ class RePDFer:
         code = ""
         for line in element:
             flag = False
-            flag_num = True
             for char in line:
+                last_is_num = False
                 if isinstance(char, pdfminer.layout.LTChar):
-                    if  'CMTT9' in char.fontname:
+                    if  'CMTT9' in char.fontname or 'CMITT10' in char.fontname:
                         code += char.get_text()
                         flag = True
                     elif 'CMSS8' in char.fontname:
-                        flag_num = False
+                        last_is_num = True
                         pass
                     else:
                         flag = False
                         text += char.get_text()
-                elif isinstance(char, pdfminer.layout.LTAnno):
-                    if flag and  flag_num:
+                elif isinstance(char, pdfminer.layout.LTAnno) and not last_is_num:
+                    if last_is_num:
+                        code+=""
+                    elif flag:
                         code += char.get_text()
-                    elif not flag and  flag_num:
+                    elif not flag:
                         text += char.get_text()
         return code, text
     
@@ -544,7 +547,7 @@ class RePDFer:
         # Ask the user informations about the pdf in general so
         # we can extract the text in a better way (avoid certain texts etc)
         # but if the config file exists, we don't need to ask the user
-        # self.debugInfo()s
+        # self.debugInfo()
         if not os.path.exists("config.json"): 
             pageInformations = self.askInformations()
             self.save_config(pageInformations)
@@ -552,7 +555,7 @@ class RePDFer:
         
         # Extract the nectare from the pdf
         pages = self.extract_content_from_pdf(pageInformations)
-        print(pages)
+        # print(pages)
         print("Writting output")
         self.module.main(pages)
         print("Weird_char : ", WEIRD_CHAR)
