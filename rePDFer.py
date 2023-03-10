@@ -10,6 +10,8 @@ import pdfminer
 from pdfminer.high_level import extract_pages
 from pdfminer.image import ImageWriter
 
+import pdfplumber
+
 from pdfviewer import PDFViewer
 from tkinter import Tk
 
@@ -190,8 +192,9 @@ class RePDFer:
             "definitions": []
         }
 
-
+        i=0
         for element in page_layout:
+            i+=1
             # If the element is a text
             if isinstance(element, pdfminer.layout.LTTextBoxHorizontal):
                 # Gets the font info of the current text
@@ -208,12 +211,12 @@ class RePDFer:
 
 
                 # Changes bad encoding of all his PDF's
-                accent_grave = "<accent_grave>"
-
+                
                 # Explique ça espece de gros fdp
                 # text = ''.join([''.join([f'{accent_grave}{char.get_text()}{accent_grave}' if isinstance(char, pdfminer.layout.LTChar) and char.fontname == 'TIXCET+CMTT10' else char.get_text() for char in line]) for line in element]).replace(accent_grave+accent_grave, "").replace(accent_grave+" "+accent_grave, " ")
-                code,text = self.concat_code_blocks(element)
                 
+                code,text = self.concat_code_blocks(element)
+                 
                 """
                 text = ""
                 for line in element:
@@ -343,8 +346,8 @@ class RePDFer:
             flag = False
             for char in line:
                 last_is_num = False
-                if isinstance(char, pdfminer.layout.LTChar):
-                    if  'CMTT9' in char.fontname or 'CMITT10' in char.fontname:
+                if isinstance(char, pdfminer.layout.LTChar):                    
+                    if  'CMTT9' in char.fontname or 'CMITT10' in char.fontname or 'CMSS9' in char.fontname or 'CMSSBX10' in char.fontname or 'SFSS0900' in char.fontname:
                         code += char.get_text()
                         flag = True
                     elif 'CMSS8' in char.fontname:
